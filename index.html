@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Riddle Quest</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a2e;
+      font-family: 'Poppins', sans-serif;
+      color: #fff;
+    }
+
+    #game-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    #instructions {
+      background: rgba(255, 255, 255, 0.07);
+      padding: 20px;
+      border-radius: 10px;
+      width: 260px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #hint-button {
+      margin-top: 10px;
+      padding: 10px 16px;
+      background-color: #ff9e00;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #hint-display {
+      margin-top: 10px;
+      font-style: italic;
+      color: #ccc;
+    }
+
+    #kaboom-container {
+      width: 600px;
+      height: 400px;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      border: 3px solid #ff9e00;
+      border-radius: 10px;
+      box-shadow: 0 0 30px rgba(255, 158, 0, 0.4);
+    }
+
+    #restart-button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #ff9e00;
+      color: #1a1a2e;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .choice-button {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #ff9e00;
+      color: #1a1a2e;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 200px;
+    }
+  </style>
+  <script src="https://unpkg.com/kaboom/dist/kaboom.js"></script>
+</head>
+<body>
+  <div id="game-wrapper">
+    <div>
+      <div id="kaboom-container"></div>
+      <button id="hint-button">💡 Show Hint</button>
+      <div id="hint-display"></div>
+    </div>
+
+    <div id="instructions">
+      <h3>🧠 How to Play</h3>
+      <ul>
+        <li>Read the riddle</li>
+        <li>Choose your answer from the options</li>
+        <li>Earn points. Don’t lose all hearts!</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Kaboom
+    kaboom({
+      width: 600,
+      height: 400,
+      background: [26, 26, 46],
+      root: document.getElementById("kaboom-container"),
+      global: true,
+    });
+
+    let scoreText, heartText, levelText, riddleText, feedback;
+    let level = 0, current = 0, points = 0, hearts = 3;
+    let choiceButtons = []; // Array to hold choice buttons for removal later
+
+    const levels = [
+      [
+        { q: "What has keys but can't open locks?", choices: ["Piano", "Map", "Book", "Phone"], a: "Piano", hint: "A musical instrument." },
+        { q: "What has a face but no eyes?", choices: ["Clock", "Mirror", "Photo", "Computer"], a: "Clock", hint: "Hangs on a wall." },
+        { q: "What has four legs but can’t walk?", choices: ["Table", "Chair", "Cat", "Dog"], a: "Table", hint: "You place things on it." },
+        { q: "What can be cracked, made, told, and played?", choices: ["Joke", "Promise", "Rule", "Game"], a: "Joke", hint: "It makes people laugh." },
+      ],
+      [
+        { q: "What has hands but can't clap?", choices: ["Clock", "Robot", "Watch", "Fan"], a: "Clock", hint: "It tells time." },
+        { q: "What runs but never walks?", choices: ["Water", "Clock", "Fan", "Wind"], a: "Water", hint: "Found in rivers." },
+        { q: "What comes once in a minute, twice in a moment, but never in a thousand years?", choices: ["M", "E", "T", "I"], a: "M", hint: "It’s a letter." },
+        { q: "The more of this there is, the less you see. What is it?", choices: ["Darkness", "Air", "Time", "Cloud"], a: "Darkness", hint: "It occurs when there's no light." },
+        { q: "What comes down but never goes up?", choices: ["Rain", "Time", "Sun", "Snow"], a: "Rain", hint: "It falls from the sky." },
+      ],
+    ];
+
+    let currentRiddle;
+
+    // Define layers
+    const uiLayer = "ui";
+
+    function startGame() {
+      // Reset game state
+      level = 0;
+      current = 0;
+      points = 0;
+      hearts = 3;
+
+      currentRiddle = levels[level][current];
+
+      // Clear existing objects
+      destroyAll();
+      choiceButtons = []; // Reset the choice buttons array
+
+      // Re-add UI
+      scoreText = add([text(`Points: ${points}`), pos(20, 20), fixed(), uiLayer]);
+      heartText = add([text(`❤️ Hearts: ${hearts}`), pos(20, 50), fixed(), uiLayer]);
+      levelText = add([text(`Level: ${level + 1}`), pos(20, 80), fixed(), uiLayer]);
+
+      riddleText = add([text(currentRiddle.q, { size: 22, width: width() - 40 }), pos(20, 130), uiLayer]);
+
+      // Move the feedback to the center of the screen
+      feedback = add([text("", { size: 22 }), pos(width() / 2 - 100, height() / 2), color(255, 255, 255), uiLayer]);
+
+      displayChoices();
+      document.getElementById("hint-display").textContent = "";
+    }
+
+    function displayChoices() {
+      // Add choice buttons dynamically
+      currentRiddle.choices.forEach((choice, index) => {
+        const choiceBtn = add([
+          text(choice, { size: 18 }),
+          pos(20, 200 + index * 40),
+          area(),
+          color(255, 158, 0),
+          uiLayer,
+          { correct: choice === currentRiddle.a }
+        ]);
+
+        choiceBtn.onClick(() => checkAnswer(choiceBtn));
+
+        // Store the choice button for removal later
+        choiceButtons.push(choiceBtn);
+      });
+    }
+
+    function checkAnswer(choiceBtn) {
+      if (choiceBtn.correct) {
+        points += 10;
+        feedback.text = "✅ Correct!";
+      } else {
+        hearts--;
+        feedback.text = "❌ Incorrect!";
+      }
+
+      // Check if hearts are 0, if so, game over
+      if (hearts <= 0) {
+        go("lose");
+        return;
+      }
+
+      wait(1.5, loadNextRiddle);
+    }
+
+    function loadNextRiddle() {
+      // Remove previous choice buttons before loading new ones
+      choiceButtons.forEach(btn => destroy(btn));
+      choiceButtons = []; // Clear the array
+
+      current++;
+      if (current >= levels[level].length) {
+        level++;
+        current = 0;
+        if (level >= levels.length) {
+          go("win");
+          return;
+        }
+      }
+      currentRiddle = levels[level][current];
+      riddleText.text = currentRiddle.q;
+      feedback.text = "";
+      updateUI();
+      document.getElementById("hint-display").textContent = "";
+      displayChoices();
+    }
+
+    function updateUI() {
+      scoreText.text = `Points: ${points}`;
+      heartText.text = `❤️ Hearts: ${hearts}`;
+      levelText.text = `Level: ${level + 1}`;
+    }
+
+    scene("win", () => {
+      add([
+        text("🎉 You Win! All riddles solved!", { size: 32 }),
+        pos(center()),
+        anchor("center")
+      ]);
+    });
+
+    scene("lose", () => {
+      add([
+        text("💀 Game Over", { size: 32 }),
+        pos(width() / 2, height() / 2 - 40),
+        anchor("center")
+      ]);
+
+      const restartBtn = add([
+        text("🔁 Restart", { size: 24 }),
+        pos(width() / 2, height() / 2 + 30),
+        area(),
+        anchor("center"),
+        color(255, 158, 0),
+        "restart",
+      ]);
+
+      restartBtn.onClick(() => {
+        go("game");
+      });
+    });
+
+    scene("game", startGame);
+
+    // Start the game
+    go("game");
+
+    // Hint button event
+    document.getElementById("hint-button").addEventListener("click", () => {
+      document.getElementById("hint-display").textContent = "Hint: " + currentRiddle.hint;
+    });
+  </script>
+</body>
+</html>
